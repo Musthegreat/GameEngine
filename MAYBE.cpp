@@ -33,7 +33,7 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
   unsigned int fs = CompileShader(fragmentShader, GL_FRAGMENT_SHADER);
 
   glAttachShader(program, vs); //do the shader stuff
-  glAttachShader(program, fs);d
+  glAttachShader(program, fs);
   glLinkProgram(program);  
   glValidateProgram(program);  
 
