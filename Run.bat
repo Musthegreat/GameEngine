@@ -1,0 +1,1 @@
+clang++ -v MAYBE.cpp -I C:\GameEngine\GLAD\ -I C:\GameEngine\GLFW\include\ -I C:\GameEngine\FREETYPE\include\ -L .\FREETYPE\lib\ -l:freetype -L .\GLAD\lib\ -l:glad -L .\GLFW\lib\ -l:glfw3 -l:opengl32 -l:user32 -l:gdi32 -l:shell32 
