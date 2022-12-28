@@ -1,9 +1,42 @@
-#include <glad\glad.h>
+#include <glew.h>
 #include <glfw3.h>
 
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+
+struct ShaderProgramSource {
+  std::string VertexSource;
+  std::string FragementSource;
+};
+
+static ShaderProgramSource ParseShader(const std::string& filepath) {
+  std::ifstream stream(filepath);
+
+  enum class ShaderType {
+    NONE = -1, VERTEX = 0, FRAGMENT =  1
+  };
+
+  std::string line;
+  std::stringstream ss[2];
+  ShaderType type = ShaderType::NONE;
+  while (getline(stream, line)) {
+    if (line.find("#shader") != std::string::npos) {
+      if (line.find("vertex") != std::string::npos)
+        type = ShaderType::VERTEX;
+      else if (line.find("fragment") != std::string::npos)
+        type = ShaderType::FRAGMENT;
+    }
+    else {
+      ss[(int)type] << line  << '\n';
+    }
+  }
+
+  return { ss[0].str(), ss[1].str() };
+}
 
 static unsigned int CompileShader(const std::string& source, unsigned int type) { //makes the shader doohicky
   unsigned int id = glCreateShader(type); 
@@ -82,65 +115,58 @@ int main(void) {
 
     glfwMakeContextCurrent(window);
 
-// start glad
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
+    // start glew
+    GLenum err = glewInit();
+    if (GLEW_OK != err) 
+    std::cout << glewGetErrorString(err) << std::endl;
+
     std::cout << glGetString(GL_VERSION) << std::endl;
 
-    float postitons[6] = { //hd rendition of your mom
-        -0.5f, -0.5f,
-         0.0f,  0.5f,
-         0.5f, -0.5f
+    float Positions[] = {
+     0.0f,    0.5f, 0.0f, 1.0f,
+     0.5f, -0.366f, 0.0f, 1.0f,
+    -0.5f, -0.366f, 0.0f, 1.0f,
+     1.0f,    0.0f, 0.0f, 1.0f,
+     0.0f,    1.0f, 0.0f, 1.0f,
+     0.0f,    0.0f, 1.0f, 1.0f,
     };
 
     unsigned int buffer;
     glGenBuffers(1, &buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(float), postitons, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Positions), Positions, GL_STATIC_DRAW);
 
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
+    ShaderProgramSource source = ParseShader("res/shaders/basic.shader");
+    std::cout << "Vertex source code" << std::endl;
+    std::cout << source.VertexSource << std::endl;
+    std::cout << "Fragment source code" << std::endl; 
+    std::cout << source.FragementSource << std::endl;
 
-    std::string vertexShader = //the shaders
-      "#version 330 core\n"
-      "\n"
-      "layout(location = 0) in vec4 position;"
-      "\n"
-      "void main() {\n"
-      " gl_Position = postion;\n"
-      "}\n";
-
-    std::string fragmentShader = //the shaders
-      R"glsl(
-        #version 330 core
-
-        layout(location = 0) in vec4 position;
-
-        void main(){
-          color = vec4(1.0, 0.0, 0.0, 1.0);
-        }
-      )glsl";
-
-    unsigned int shader = CreateShader(vertexShader, fragmentShader);
+    unsigned int shader = CreateShader(source.VertexSource, source.FragementSource);
     glUseProgram(shader); //hey thats pretty cool
 
     /* Loop until the user closes the window */
-    while (!glfwWindowShouldClose(window))
-    {
-        /* Render here */
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-
-        /* Swap front and back buffers */
-        glfwSwapBuffers(window);
-
-        /* Poll for and process events */
-        glfwPollEvents();
+    while (!glfwWindowShouldClose(window)) {
+    
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    
+    glUseProgram(shader);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (void*)48);
+    
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glUseProgram(0);
+    
+    glfwSwapBuffers(window);
+    glfwPollEvents();
     }
 
     glDeleteProgram(shader);
