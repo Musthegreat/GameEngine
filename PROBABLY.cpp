@@ -5,13 +5,109 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <vector>
+#include <math.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
+
+#define ARRAY_COUNT( array ) (sizeof( array ) / (sizeof( array[0] ) * (sizeof( array ) != sizeof(void*) || sizeof( array[0] ) <= sizeof(void*))))
+
+
+float Positions[] = {
+
+	0.25f, 0.25f, 0.0f, 1.0f,
+	0.25f, -0.25f, 0.0f, 1.0f,
+	-0.25f, -0.25f, 0.0f, 1.0f,
+};
+
 
 struct ShaderProgramSource {
   std::string VertexSource;
   std::string FragementSource;
 };
+
+
+unsigned int buffer;
+FT_Library freetype;
+FT_Face face;
+GLFWwindow* window;
+
+
+GLuint positionBufferObject;
+GLuint vao;
+
+
+//spinny function
+void ComputePositionOffsets(float &fXOffset, float &fYOffset)
+{
+    const float fLoopDuration = 5.0f;
+    const float fScale = 3.14159f * 2.0f / fLoopDuration;
+    uint64_t Time = glfwGetTimerValue();
+
+    float fElapsedTime = Time / 1000000.0f;
+    
+    float fCurrTimeThroughLoop = fmodf(fElapsedTime, fLoopDuration);
+    
+    fXOffset = cosf(fCurrTimeThroughLoop * fScale) * 0.5f;
+    fYOffset = sinf(fCurrTimeThroughLoop * fScale) * 0.5f;
+}
+
+
+//apply the spinny
+void AdjustVertexData(float fXOffset, float fYOffset)
+{
+    std::vector<float> fNewData(ARRAY_COUNT(Positions));
+    memcpy(&fNewData[0], Positions, sizeof(Positions));
+    
+    for(int iVertex = 0; iVertex < ARRAY_COUNT(Positions); iVertex += 4)
+    {
+        fNewData[iVertex] += fXOffset;
+        fNewData[iVertex + 1] += fYOffset;
+    }
+    
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Positions), &fNewData[0]);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+
+void InitalizeStuff() {
+
+// start freetype
+    if (FT_Init_FreeType(&freetype)) {
+       std::cout << "Failed to initialize FREETYPE" << std::endl;
+    }
+
+// start glfw
+    if (!glfwInit()) {
+       std::cout << "Failed to initialize GLFW" << std::endl;
+    }
+
+    window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL) ;
+    if (!window)
+    {
+        glfwTerminate();
+    }
+
+    glfwMakeContextCurrent(window);
+
+// start glew
+    GLenum err = glewInit();
+    if (GLEW_OK != err) 
+    std::cout << glewGetErrorString(err) << std::endl;
+
+    std::cout << glGetString(GL_VERSION) << std::endl;
+};
+
+
+void InitializeVetexBuffer() {
+    
+    glGenBuffers(1, &buffer);
+
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Positions), Positions, GL_STATIC_DRAW);
+};
+
 
 static ShaderProgramSource ParseShader(const std::string& filepath) {
   std::ifstream stream(filepath);
@@ -38,6 +134,7 @@ static ShaderProgramSource ParseShader(const std::string& filepath) {
   return { ss[0].str(), ss[1].str() };
 }
 
+
 static unsigned int CompileShader(const std::string& source, unsigned int type) { //makes the shader doohicky
   unsigned int id = glCreateShader(type); 
   const char* scr = source.c_str();                 
@@ -60,6 +157,7 @@ static unsigned int CompileShader(const std::string& source, unsigned int type) 
   return id;
 }
 
+
 static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader) { //slaps shader to the program
   unsigned int program = glCreateProgram();
   unsigned int vs = CompileShader(vertexShader, GL_VERTEX_SHADER);
@@ -77,64 +175,11 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
 }
 
 int main(void) {
+    InitalizeStuff();
+    InitializeVetexBuffer();
 
-    FT_Library freetype;
-    FT_Face face;
-
-// start freetype
-    if (FT_Init_FreeType(&freetype)) {
-       std::cout << "Failed to initialize FREETYPE" << std::endl;
-       return 1;
-    }
-
-    if(FT_New_Face(freetype, "/GameEngine/Office Code Pro/officecodeprod-regular.otf", 0, &face)) {
-    std::cout << "Could not open font" << std::endl;
-      if (FT_Err_Unknown_File_Format) {
-      std::cout << "Unsupported font file" << std::endl;
-      }
-    return 1;
-}
-
-    FT_GlyphSlot F_glyph = face->glyph;
-
-
-
-// start glfw
-    GLFWwindow* window;
-
-    if (!glfwInit()) {
-       std::cout << "Failed to initialize GLFW" << std::endl;
-    }
-
-    window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL) ;
-    if (!window)
-    {
-        glfwTerminate();
-        return -1;
-    }
-
-    glfwMakeContextCurrent(window);
-
-    // start glew
-    GLenum err = glewInit();
-    if (GLEW_OK != err) 
-    std::cout << glewGetErrorString(err) << std::endl;
-
-    std::cout << glGetString(GL_VERSION) << std::endl;
-
-    float Positions[] = {
-     0.0f,    0.5f, 0.0f, 1.0f,
-     0.5f, -0.366f, 0.0f, 1.0f,
-    -0.5f, -0.366f, 0.0f, 1.0f,
-     1.0f,    0.0f, 0.0f, 1.0f,
-     0.0f,    1.0f, 0.0f, 1.0f,
-     0.0f,    0.0f, 1.0f, 1.0f,
-    };
-
-    unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Positions), Positions, GL_STATIC_DRAW);
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
 
     ShaderProgramSource source = ParseShader("res/shaders/basic.shader");
     std::cout << "Vertex source code" << std::endl;
@@ -143,11 +188,15 @@ int main(void) {
     std::cout << source.FragementSource << std::endl;
 
     unsigned int shader = CreateShader(source.VertexSource, source.FragementSource);
-    glUseProgram(shader); //hey thats pretty cool
+    glUseProgram(shader);
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window)) {
     
+	float fXOffset = 0.0f, fYOffset = 0.0f;
+	ComputePositionOffsets(fXOffset, fYOffset);
+	AdjustVertexData(fXOffset, fYOffset);
+
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     
@@ -155,14 +204,11 @@ int main(void) {
     
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
     glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, (void*)48);
-    
+
     glDrawArrays(GL_TRIANGLES, 0, 3);
     
     glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
     glUseProgram(0);
     
     glfwSwapBuffers(window);
@@ -173,4 +219,4 @@ int main(void) {
 
     glfwTerminate();
     return 0;
-}
+};
