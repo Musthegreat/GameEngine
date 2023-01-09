@@ -32,43 +32,76 @@ FT_Library freetype;
 FT_Face face;
 GLFWwindow* window;
 
-
+GLint offsetLocation;
 GLuint positionBufferObject;
 GLuint vao;
+unsigned int shader;
 
 
-//spinny function
-void ComputePositionOffsets(float &fXOffset, float &fYOffset)
-{
-    const float fLoopDuration = 5.0f;
-    const float fScale = 3.14159f * 2.0f / fLoopDuration;
-    uint64_t Time = glfwGetTimerValue();
+static ShaderProgramSource ParseShader(const std::string& filepath) {
+  std::ifstream stream(filepath);
 
-    float fElapsedTime = Time / 1000000.0f;
-    
-    float fCurrTimeThroughLoop = fmodf(fElapsedTime, fLoopDuration);
-    
-    fXOffset = cosf(fCurrTimeThroughLoop * fScale) * 0.5f;
-    fYOffset = sinf(fCurrTimeThroughLoop * fScale) * 0.5f;
-}
+  enum class ShaderType {
+    NONE = -1, VERTEX = 0, FRAGMENT =  1
+  };
 
-
-//apply the spinny
-void AdjustVertexData(float fXOffset, float fYOffset)
-{
-    std::vector<float> fNewData(ARRAY_COUNT(Positions));
-    memcpy(&fNewData[0], Positions, sizeof(Positions));
-    
-    for(int iVertex = 0; iVertex < ARRAY_COUNT(Positions); iVertex += 4)
-    {
-        fNewData[iVertex] += fXOffset;
-        fNewData[iVertex + 1] += fYOffset;
+  std::string line;
+  std::stringstream ss[2];
+  ShaderType type = ShaderType::NONE;
+  while (getline(stream, line)) {
+    if (line.find("#shader") != std::string::npos) {
+      if (line.find("vertex") != std::string::npos)
+        type = ShaderType::VERTEX;
+      else if (line.find("fragment") != std::string::npos)
+        type = ShaderType::FRAGMENT;
     }
-    
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Positions), &fNewData[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
+    else {
+      ss[(int)type] << line  << '\n';
+    }
+  }
+
+  return { ss[0].str(), ss[1].str() };
+};
+
+
+static unsigned int CompileShader(const std::string& source, unsigned int type) { //makes the shader doohicky
+  unsigned int id = glCreateShader(type); 
+  const char* scr = source.c_str();                 
+  glShaderSource(id, 1, &scr, nullptr);
+  glCompileShader(id);
+
+  int result;
+  glGetShaderiv(id, GL_COMPILE_STATUS, &result);
+  if (result == GL_FALSE) {
+    int length;
+    glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
+    char* message = (char*)alloca(length * sizeof(char));
+    glGetShaderInfoLog(id, length, &length, message);
+    std::cout << "Failed to compile shader" << std::endl;
+    std::cout << message << std::endl;
+    glDeleteShader(id);
+    return 0;
+  }
+
+  return id;
+};
+
+
+static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader) { //slaps shader to the program
+  unsigned int program = glCreateProgram();
+  unsigned int vs = CompileShader(vertexShader, GL_VERTEX_SHADER);
+  unsigned int fs = CompileShader(fragmentShader, GL_FRAGMENT_SHADER);
+
+  glAttachShader(program, vs); //do the shader stuff
+  glAttachShader(program, fs);
+  glLinkProgram(program);  
+  glValidateProgram(program);  
+
+  glDeleteShader(vs);
+  glDeleteShader(fs);
+
+  return program;
+};
 
 
 void InitalizeStuff() {
@@ -97,7 +130,50 @@ void InitalizeStuff() {
     std::cout << glewGetErrorString(err) << std::endl;
 
     std::cout << glGetString(GL_VERSION) << std::endl;
+
+    ShaderProgramSource source = ParseShader("res/shaders/basic.shader");
+    std::cout << "Vertex source code" << std::endl;
+    std::cout << source.VertexSource << std::endl;
+    std::cout << "Fragment source code" << std::endl; 
+    std::cout << source.FragementSource << std::endl;
+
+    shader = CreateShader(source.VertexSource, source.FragementSource);
+
+    offsetLocation = glGetUniformLocation(shader, "offset");
+    std::cout<<offsetLocation<<std::endl;
 };
+
+//spinny function
+void ComputePositionOffsets(float &fXOffset, float &fYOffset)
+{
+    const float fLoopDuration = 5.0f;
+    const float fScale = 3.14159f * 2.0f / fLoopDuration;
+    uint64_t Time = glfwGetTimerValue();
+
+    float fElapsedTime = Time / 1000000.0f;
+    
+    float fCurrTimeThroughLoop = fmodf(fElapsedTime, fLoopDuration);
+    
+    fXOffset = cosf(fCurrTimeThroughLoop * fScale) * 0.5f;
+    fYOffset = sinf(fCurrTimeThroughLoop * fScale) * 0.5f;
+}
+
+//apply the spinny
+void AdjustVertexData(float fXOffset, float fYOffset)
+{
+    std::vector<float> fNewData(ARRAY_COUNT(Positions));
+    memcpy(&fNewData[0], Positions, sizeof(Positions));
+    
+    for(int iVertex = 0; iVertex < ARRAY_COUNT(Positions); iVertex += 4)
+    {
+        fNewData[iVertex] += fXOffset;
+        fNewData[iVertex + 1] += fYOffset;
+    }
+    
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Positions), &fNewData[0]);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
 
 
 void InitializeVetexBuffer() {
@@ -109,98 +185,25 @@ void InitializeVetexBuffer() {
 };
 
 
-static ShaderProgramSource ParseShader(const std::string& filepath) {
-  std::ifstream stream(filepath);
-
-  enum class ShaderType {
-    NONE = -1, VERTEX = 0, FRAGMENT =  1
-  };
-
-  std::string line;
-  std::stringstream ss[2];
-  ShaderType type = ShaderType::NONE;
-  while (getline(stream, line)) {
-    if (line.find("#shader") != std::string::npos) {
-      if (line.find("vertex") != std::string::npos)
-        type = ShaderType::VERTEX;
-      else if (line.find("fragment") != std::string::npos)
-        type = ShaderType::FRAGMENT;
-    }
-    else {
-      ss[(int)type] << line  << '\n';
-    }
-  }
-
-  return { ss[0].str(), ss[1].str() };
-}
-
-
-static unsigned int CompileShader(const std::string& source, unsigned int type) { //makes the shader doohicky
-  unsigned int id = glCreateShader(type); 
-  const char* scr = source.c_str();                 
-  glShaderSource(id, 1, &scr, nullptr);
-  glCompileShader(id);
-
-  int result;
-  glGetShaderiv(id, GL_COMPILE_STATUS, &result);
-  if (result == GL_FALSE) {
-    int length;
-    glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-    char* message = (char*)alloca(length * sizeof(char));
-    glGetShaderInfoLog(id, length, &length, message);
-    std::cout << "Failed to compile shader" << std::endl;
-    std::cout << message << std::endl;
-    glDeleteShader(id);
-    return 0;
-  }
-
-  return id;
-}
-
-
-static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader) { //slaps shader to the program
-  unsigned int program = glCreateProgram();
-  unsigned int vs = CompileShader(vertexShader, GL_VERTEX_SHADER);
-  unsigned int fs = CompileShader(fragmentShader, GL_FRAGMENT_SHADER);
-
-  glAttachShader(program, vs); //do the shader stuff
-  glAttachShader(program, fs);
-  glLinkProgram(program);  
-  glValidateProgram(program);  
-
-  glDeleteShader(vs);
-  glDeleteShader(fs);
-
-  return program;
-}
-
 int main(void) {
     InitalizeStuff();
     InitializeVetexBuffer();
 
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-
-    ShaderProgramSource source = ParseShader("res/shaders/basic.shader");
-    std::cout << "Vertex source code" << std::endl;
-    std::cout << source.VertexSource << std::endl;
-    std::cout << "Fragment source code" << std::endl; 
-    std::cout << source.FragementSource << std::endl;
-
-    unsigned int shader = CreateShader(source.VertexSource, source.FragementSource);
-    glUseProgram(shader);
+	  glGenVertexArrays(1, &vao);
+	  glBindVertexArray(vao);
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window)) {
     
-	float fXOffset = 0.0f, fYOffset = 0.0f;
-	ComputePositionOffsets(fXOffset, fYOffset);
-	AdjustVertexData(fXOffset, fYOffset);
+	  float fXOffset = 0.0f, fYOffset = 0.0f;
+	  ComputePositionOffsets(fXOffset, fYOffset);
 
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     
     glUseProgram(shader);
+
+    glUniform2f(offsetLocation, fXOffset, fYOffset);
     
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
     glEnableVertexAttribArray(0);
