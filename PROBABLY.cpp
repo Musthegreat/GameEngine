@@ -32,7 +32,7 @@ FT_Library freetype;
 FT_Face face;
 GLFWwindow* window;
 
-GLint offsetLocation;
+GLint elapsedTimeUniform;
 GLuint positionBufferObject;
 GLuint vao;
 unsigned int shader;
@@ -125,55 +125,26 @@ void InitalizeStuff() {
     glfwMakeContextCurrent(window);
 
 // start glew
-    GLenum err = glewInit();
-    if (GLEW_OK != err) 
-    std::cout << glewGetErrorString(err) << std::endl;
+  GLenum err = glewInit();
+  if (GLEW_OK != err) 
+  std::cout << glewGetErrorString(err) << std::endl;
 
-    std::cout << glGetString(GL_VERSION) << std::endl;
+  std::cout << glGetString(GL_VERSION) << std::endl;
 
-    ShaderProgramSource source = ParseShader("res/shaders/basic.shader");
-    std::cout << "Vertex source code" << std::endl;
-    std::cout << source.VertexSource << std::endl;
+  ShaderProgramSource source = ParseShader("res/shaders/basic.shader");
+    std::cout << "Vertex source code" << std::endl;    std::cout << source.VertexSource << std::endl;
     std::cout << "Fragment source code" << std::endl; 
     std::cout << source.FragementSource << std::endl;
 
     shader = CreateShader(source.VertexSource, source.FragementSource);
 
-    offsetLocation = glGetUniformLocation(shader, "offset");
-    std::cout<<offsetLocation<<std::endl;
+    elapsedTimeUniform = glGetUniformLocation(shader, "time");
+    
+    GLint loopDurationUnf = glGetUniformLocation(shader, "loopDuration");
+    glUseProgram(shader);
+    glUniform1f(loopDurationUnf, 5.0f);
+    glUseProgram(0); 
 };
-
-//spinny function
-void ComputePositionOffsets(float &fXOffset, float &fYOffset)
-{
-    const float fLoopDuration = 5.0f;
-    const float fScale = 3.14159f * 2.0f / fLoopDuration;
-    uint64_t Time = glfwGetTimerValue();
-
-    float fElapsedTime = Time / 1000000.0f;
-    
-    float fCurrTimeThroughLoop = fmodf(fElapsedTime, fLoopDuration);
-    
-    fXOffset = cosf(fCurrTimeThroughLoop * fScale) * 0.5f;
-    fYOffset = sinf(fCurrTimeThroughLoop * fScale) * 0.5f;
-}
-
-//apply the spinny
-void AdjustVertexData(float fXOffset, float fYOffset)
-{
-    std::vector<float> fNewData(ARRAY_COUNT(Positions));
-    memcpy(&fNewData[0], Positions, sizeof(Positions));
-    
-    for(int iVertex = 0; iVertex < ARRAY_COUNT(Positions); iVertex += 4)
-    {
-        fNewData[iVertex] += fXOffset;
-        fNewData[iVertex + 1] += fYOffset;
-    }
-    
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Positions), &fNewData[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
 
 
 void InitializeVetexBuffer() {
@@ -186,6 +157,7 @@ void InitializeVetexBuffer() {
 
 
 int main(void) {
+
     InitalizeStuff();
     InitializeVetexBuffer();
 
@@ -195,15 +167,13 @@ int main(void) {
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window)) {
     
-	  float fXOffset = 0.0f, fYOffset = 0.0f;
-	  ComputePositionOffsets(fXOffset, fYOffset);
 
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     
     glUseProgram(shader);
 
-    glUniform2f(offsetLocation, fXOffset, fYOffset);
+    glUniform1f(elapsedTimeUniform, glfwGetTimerValue() / 1000000.0f);
     
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
     glEnableVertexAttribArray(0);
