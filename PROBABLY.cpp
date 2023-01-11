@@ -8,6 +8,7 @@
 #include <vector>
 #include <math.h>
 #include <ft2build.h>
+#include <sound.h>
 #include FT_FREETYPE_H
 
 #define ARRAY_COUNT( array ) (sizeof( array ) / (sizeof( array[0] ) * (sizeof( array ) != sizeof(void*) || sizeof( array[0] ) <= sizeof(void*))))
